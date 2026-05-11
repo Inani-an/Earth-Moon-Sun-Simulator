@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 地月日系统模拟仪 - 黄白交角与日月食检测</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { background: #000; overflow: hidden; }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 20px;
+            color: white;
+            font-family: system-ui, -apple-system, sans-serif;
+            z-index: 100;
+            min-width: 280px;
+        }
+
+        .control-panel h3 {
+            margin-bottom: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #60a5fa;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 12px;
+        }
+
+        .control-group {
+            margin-bottom: 16px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 8px;
+        }
+
+        .control-group input[type="date"],
+        .control-group select {
+            width: 100%;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .control-group select option {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .view-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .view-btn {
+            flex: 1;
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .view-btn:hover {
+            background: rgba(96, 165, 250, 0.2);
+            border-color: rgba(96, 165, 250, 0.5);
+        }
+
+        .view-btn.active {
+            background: rgba(96, 165, 250, 0.3);
+            border-color: #60a5fa;
+            color: #60a5fa;
+        }
+
+        .view-info {
+            padding: 10px;
+            background: rgba(79, 172, 254, 0.1);
+            border: 1px solid rgba(79, 172, 254, 0.2);
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 12px;
+        }
+
+        .moon-phase {
+            padding: 12px;
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 12px;
+        }
+
+        .moon-phase-label {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 4px;
+        }
+
+        .moon-phase-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #fbbf24;
+        }
+
+        .eclipse-alert {
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            border-radius: 8px;
+            text-align: center;
+            margin-top: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #ef4444;
+            display: none;
+        }
+
+        .status-display {
+            padding: 10px;
+            background: rgba(245, 158, 11, 0.15);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+            color: #f59e0b;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+
+        .info-text {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .info-text kbd {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+    </style>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div class="control-panel">
+        <h3>🌍 地月日系统控制</h3>
+        <div class="control-group">
+            <label for="datePicker">选择日期</label>
+            <input type="date" id="datePicker" value="2024-03-21">
+        </div>
+        <div class="control-group">
+            <label for="speedSelector">模拟速度</label>
+            <select id="speedSelector">
+                <option value="0.1">0.25x 龟速</option>
+                <option value="0.2">0.5x 慢速</option>
+                <option value="0.4" selected>1x 正常</option>
+                <option value="0.8">2x 快速</option>
+                <option value="2">5x 很快</option>
+                <option value="4">10x 极速</option>
+                <option value="40">100x 超速</option>
+                <option value="400">1000x 极速光速</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label>视角切换</label>
+            <div class="view-buttons">
+                <button class="view-btn active" id="btnGodView">上帝视角</button>
+                <button class="view-btn" id="btnEarthView">地球观测台</button>
+            </div>
+        </div>
+        <div class="view-info" id="viewInfo">
+            👁️ 上帝视角 - 自由观察整个太阳系
+        </div>
+        <div class="moon-phase">
+            <div class="moon-phase-label">当前月相</div>
+            <div class="moon-phase-value" id="moonPhaseValue">--</div>
+        </div>
+        <div class="eclipse-alert" id="eclipseAlert">
+            ⚠️ 日食/月食发生中！
+        </div>
+        <div class="status-display" id="statusDisplay">
+            ⏸ 已暂停
+        </div>
+        <div class="info-text">
+            按 <kbd>空格键</kbd> 暂停/开始 | <kbd>1/2</kbd> 切换视角
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const cfg = {
+            sunRadius: 5,
+            earthRadius: 1,
+            moonRadius: 0.35,
+            earthOrbitRadius: 22,
+            moonOrbitRadius: 3.5,
+            earthRotationSpeed: 0.012,
+            moonRotationSpeed: 0.008,
+            earthAxialTilt: 23.5,
+            moonOrbitalInclination: 5.14
+        };
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({antialias:true});
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        let currentView = 'god';
+        const godViewPosition = new THREE.Vector3(35, 20, 45);
+        const defaultFov = 60;
+        const telescopeFov = 15;
+
+        const originalEarthRotationSpeed = cfg.earthRotationSpeed;
+        const slowEarthRotationSpeed = 0.001;
+
+        const earthWorldPos = new THREE.Vector3();
+        const moonWorldPos = new THREE.Vector3();
+        const sunWorldPos = new THREE.Vector3();
+
+        let simulationSpeed = 0.4;
+        let lastTime = performance.now();
+        let simulationDays = 0;
+
+        camera.position.copy(godViewPosition);
+
+        const sunGeo = new THREE.SphereGeometry(cfg.sunRadius, 64, 64);
+        const sunMaterial = new THREE.MeshBasicMaterial({color: 0xffcc00});
+        const sun = new THREE.Mesh(sunGeo, sunMaterial);
+        scene.add(sun);
+
+        const sunGlowGeo = new THREE.SphereGeometry(cfg.sunRadius * 1.15, 32, 32);
+        const sunGlowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff6600,
+            transparent: true,
+            opacity: 0.4
+        });
+        const sunGlow = new THREE.Mesh(sunGlowGeo, sunGlowMaterial);
+        scene.add(sunGlow);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createRadialGradient(256, 256, 0, 256, 256, 256);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.2, '#ffff88');
+        gradient.addColorStop(0.5, '#ffcc00');
+        gradient.addColorStop(0.8, '#ff8800');
+        gradient.addColorStop(1, '#ff4400');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 512, 512);
+        const sunTexture = new THREE.CanvasTexture(canvas);
+        sunTexture.colorSpace = THREE.SRGBColorSpace;
+        sunMaterial.map = sunTexture;
+
+        const earthOrbitNode = new THREE.Object3D();
+        scene.add(earthOrbitNode);
+
+        const earthTiltNode = new THREE.Object3D();
+        earthTiltNode.rotation.x = cfg.earthAxialTilt * Math.PI / 180;
+        earthOrbitNode.add(earthTiltNode);
+
+        const earthGeo = new THREE.SphereGeometry(cfg.earthRadius, 64, 64);
+        const earthMaterial = new THREE.MeshStandardMaterial({
+            color: 0x6ab0ff,
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const earth = new THREE.Mesh(earthGeo, earthMaterial);
+        earthTiltNode.add(earth);
+
+        const textureLoader = new THREE.TextureLoader();
+        textureLoader.load('https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg', function(texture) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            earthMaterial.map = texture;
+            earthMaterial.needsUpdate = true;
+        });
+
+        const moonOrbitPlane = new THREE.Object3D();
+        moonOrbitPlane.rotation.x = cfg.moonOrbitalInclination * Math.PI / 180;
+        earthTiltNode.add(moonOrbitPlane);
+
+        const moonGeo = new THREE.SphereGeometry(cfg.moonRadius, 32, 32);
+        const moonMaterial = new THREE.MeshStandardMaterial({
+            color: 0xe0e0e0,
+            roughness: 0.9,
+            metalness: 0
+        });
+        const moon = new THREE.Mesh(moonGeo, moonMaterial);
+        moonOrbitPlane.add(moon);
+
+        textureLoader.load('https://threejs.org/examples/textures/moon_2048.jpg', function(texture) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            moonMaterial.map = texture;
+            moonMaterial.needsUpdate = true;
+        });
+
+        const sunLight = new THREE.PointLight(0xffffff, 60, 800);
+        sunLight.position.set(0, 0, 0);
+        scene.add(sunLight);
+
+        const ambientLight = new THREE.AmbientLight(0x000000, 0);
+        scene.add(ambientLight);
+
+        const REFERENCE_DATE = new Date('2024-01-01');
+        const EARTH_ORBIT_DAYS = 365.25;
+        const SYNODIC_MONTH_DAYS = 29.53;
+
+        const ECLIPSE_THRESHOLD = 0.8;
+
+        let initialDays = 0;
+        let isRunning = false;
+        let eclipseAutoPaused = false;
+
+        const datePicker = document.getElementById('datePicker');
+        const speedSelector = document.getElementById('speedSelector');
+        const statusDisplay = document.getElementById('statusDisplay');
+        const viewInfo = document.getElementById('viewInfo');
+        const moonPhaseValue = document.getElementById('moonPhaseValue');
+        const eclipseAlert = document.getElementById('eclipseAlert');
+        const btnGodView = document.getElementById('btnGodView');
+        const btnEarthView = document.getElementById('btnEarthView');
+
+        function calculateDaysFromReference(date) {
+            const oneDay = 24 * 60 * 60 * 1000;
+            return (date.getTime() - REFERENCE_DATE.getTime()) / oneDay;
+        }
+
+        function updatePositionsFromDays(totalDays) {
+            const earthAngle = (totalDays % EARTH_ORBIT_DAYS) / EARTH_ORBIT_DAYS * Math.PI * 2;
+            earthOrbitNode.position.x = cfg.earthOrbitRadius * Math.cos(earthAngle);
+            earthOrbitNode.position.z = cfg.earthOrbitRadius * Math.sin(earthAngle);
+
+            const moonAngle = (totalDays % SYNODIC_MONTH_DAYS) / SYNODIC_MONTH_DAYS * Math.PI * 2;
+            moon.position.x = cfg.moonOrbitRadius * Math.cos(moonAngle);
+            moon.position.z = cfg.moonOrbitRadius * Math.sin(moonAngle);
+        }
+
+        function updateDatePickerFromDays(totalDays) {
+            const targetDate = new Date(REFERENCE_DATE.getTime() + totalDays * 24 * 60 * 60 * 1000);
+            datePicker.valueAsDate = targetDate;
+        }
+
+        function calculateMoonPhase() {
+            earth.getWorldPosition(earthWorldPos);
+            moon.getWorldPosition(moonWorldPos);
+            sun.getWorldPosition(sunWorldPos);
+
+            const earthToSun = new THREE.Vector3().subVectors(sunWorldPos, earthWorldPos).normalize();
+            const earthToMoon = new THREE.Vector3().subVectors(moonWorldPos, earthWorldPos).normalize();
+
+            const dot = earthToSun.dot(earthToMoon);
+            const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+            const angleDeg = angle * (180 / Math.PI);
+
+            const cross = new THREE.Vector3().crossVectors(earthToSun, earthToMoon);
+            const isUpper = cross.y > 0;
+
+            let phaseName = '--';
+
+            if (angleDeg < 10) {
+                phaseName = '🌑 新月（朔月）';
+            } else if (angleDeg < 80) {
+                phaseName = isUpper ? '🌒 蛾眉月' : '🌘 残月';
+            } else if (angleDeg < 100) {
+                phaseName = isUpper ? '🌓 上弦月' : '🌗 下弦月';
+            } else if (angleDeg < 170) {
+                phaseName = isUpper ? '🌔 盈凸月' : '🌖 亏凸月';
+            } else if (angleDeg <= 180) {
+                phaseName = '🌕 满月（望月）';
+            }
+
+            return phaseName;
+        }
+
+        function checkEclipses() {
+            earth.getWorldPosition(earthWorldPos);
+            moon.getWorldPosition(moonWorldPos);
+            sun.getWorldPosition(sunWorldPos);
+
+            const earthToSun = new THREE.Vector3().subVectors(sunWorldPos, earthWorldPos);
+            const earthToMoon = new THREE.Vector3().subVectors(moonWorldPos, earthWorldPos);
+            const earthToSunDir = earthToSun.clone().normalize();
+
+            const earthToSunLength = earthToSun.length();
+            const earthToMoonLength = earthToMoon.length();
+
+            const dotSunMoon = earthToSunDir.dot(earthToMoon);
+            const projectionLength = earthToMoon.dot(earthToSunDir);
+
+            let distanceToSunLine = 0;
+            if (projectionLength < 0) {
+                distanceToSunLine = earthToMoonLength;
+            } else if (projectionLength > earthToSunLength) {
+                const shadowPoint = new THREE.Vector3().copy(earthToSun);
+                distanceToSunLine = new THREE.Vector3().subVectors(moonWorldPos, sunWorldPos).length();
+            } else {
+                const projection = earthToSunDir.clone().multiplyScalar(projectionLength);
+                const perpendicular = new THREE.Vector3().subVectors(earthToMoon, projection);
+                distanceToSunLine = perpendicular.length();
+            }
+
+            const sunEarthMoonAngle = earthToSun.clone().normalize().dot(earthToMoon.clone().normalize());
+            const isNewMoonAlignment = sunEarthMoonAngle > 0.99;
+            const isFullMoonAlignment = sunEarthMoonAngle < -0.99;
+
+            let isSolarEclipse = false;
+            let isLunarEclipse = false;
+
+            if (isNewMoonAlignment && distanceToSunLine < ECLIPSE_THRESHOLD) {
+                isSolarEclipse = true;
+            }
+
+            if (isFullMoonAlignment) {
+                const earthToShadow = earthToSun.clone().normalize().multiplyScalar(-earthToSunLength * 2);
+                const shadowEnd = new THREE.Vector3().addVectors(earthWorldPos, earthToShadow);
+                const moonToShadowLine = new THREE.Vector3().subVectors(shadowEnd, moonWorldPos);
+                const shadowProjection = moonToShadowLine.dot(earthToSun.clone().normalize().negate());
+
+                let distanceToShadowLine = moonToShadowLine.length();
+                if (shadowProjection > 0 && shadowProjection < earthToSunLength * 2) {
+                    const proj = earthToSun.clone().normalize().negate().multiplyScalar(shadowProjection);
+                    distanceToShadowLine = new THREE.Vector3().subVectors(moonToShadowLine, proj).length();
+                }
+
+                if (distanceToShadowLine < ECLIPSE_THRESHOLD * 1.5) {
+                    isLunarEclipse = true;
+                }
+            }
+
+            if (isSolarEclipse) {
+                eclipseAlert.textContent = '⚠️ 日食发生中！';
+                eclipseAlert.style.display = 'block';
+                eclipseAlert.style.background = 'rgba(239, 68, 68, 0.2)';
+                eclipseAlert.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                if (isRunning && !eclipseAutoPaused) {
+                    isRunning = false;
+                    eclipseAutoPaused = true;
+                    statusDisplay.textContent = '⏸ 日食已暂停';
+                    statusDisplay.style.color = '#ef4444';
+                }
+            } else if (isLunarEclipse) {
+                eclipseAlert.textContent = '⚠️ 月食发生中！';
+                eclipseAlert.style.display = 'block';
+                eclipseAlert.style.background = 'rgba(251, 191, 36, 0.2)';
+                eclipseAlert.style.borderColor = 'rgba(251, 191, 36, 0.5)';
+                if (isRunning && !eclipseAutoPaused) {
+                    isRunning = false;
+                    eclipseAutoPaused = true;
+                    statusDisplay.textContent = '⏸ 月食已暂停';
+                    statusDisplay.style.color = '#fbbf24';
+                }
+            } else {
+                eclipseAlert.style.display = 'none';
+                eclipseAutoPaused = false;
+            }
+        }
+
+        function toggleRunning() {
+            isRunning = !isRunning;
+            if (isRunning) {
+                lastTime = performance.now();
+                eclipseAutoPaused = false;
+            }
+            statusDisplay.textContent = isRunning ? '▶ 运行中' : '⏸ 已暂停';
+            statusDisplay.style.color = isRunning ? '#22c55e' : '#f59e0b';
+        }
+
+        function setView(viewMode) {
+            if (currentView === viewMode) return;
+
+            btnGodView.classList.remove('active');
+            btnEarthView.classList.remove('active');
+
+            if (camera.parent) {
+                camera.parent.remove(camera);
+            }
+
+            switch(viewMode) {
+                case 'god':
+                    btnGodView.classList.add('active');
+                    viewInfo.textContent = '👁️ 上帝视角 - 自由观察整个太阳系';
+                    scene.add(camera);
+                    camera.position.copy(godViewPosition);
+                    camera.rotation.set(0, 0, 0);
+                    camera.fov = defaultFov;
+                    camera.updateProjectionMatrix();
+                    controls.enabled = true;
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+                    earth.visible = true;
+                    moon.visible = true;
+                    cfg.earthRotationSpeed = originalEarthRotationSpeed;
+                    break;
+                case 'earth':
+                    btnEarthView.classList.add('active');
+                    viewInfo.textContent = '🔭 地球观测台 - 望远镜自动追踪月球';
+                    scene.add(camera);
+                    camera.fov = telescopeFov;
+                    camera.updateProjectionMatrix();
+                    controls.enabled = false;
+                    earth.visible = false;
+                    moon.visible = true;
+                    cfg.earthRotationSpeed = slowEarthRotationSpeed;
+                    break;
+            }
+
+            currentView = viewMode;
+        }
+
+        btnGodView.addEventListener('click', () => setView('god'));
+        btnEarthView.addEventListener('click', () => setView('earth'));
+
+        speedSelector.addEventListener('change', function(e) {
+            simulationSpeed = parseFloat(e.target.value);
+        });
+
+        datePicker.addEventListener('change', function(e) {
+            simulationDays = calculateDaysFromReference(new Date(e.target.value));
+            updatePositionsFromDays(simulationDays);
+            isRunning = false;
+            eclipseAutoPaused = false;
+            statusDisplay.textContent = '⏸ 已暂停';
+            statusDisplay.style.color = '#f59e0b';
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                toggleRunning();
+            }
+            if (e.code === 'Digit1') setView('god');
+            if (e.code === 'Digit2') setView('earth');
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isRunning) {
+                const currentTime = performance.now();
+                const deltaTime = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
+
+                simulationDays += simulationSpeed * deltaTime;
+
+                updatePositionsFromDays(simulationDays);
+                updateDatePickerFromDays(simulationDays);
+
+                earth.rotation.y += cfg.earthRotationSpeed;
+                moon.rotation.y += cfg.moonRotationSpeed;
+            }
+
+            moonPhaseValue.textContent = calculateMoonPhase();
+            checkEclipses();
+
+            earth.updateMatrixWorld(true);
+            moon.updateMatrixWorld(true);
+
+            if (currentView === 'earth') {
+                controls.enabled = false;
+
+                sun.visible = false;
+                sunGlow.visible = false;
+
+                if (camera.parent !== scene) {
+                    camera.parent.remove(camera);
+                    scene.add(camera);
+                }
+
+                earth.getWorldPosition(earthWorldPos);
+                moon.getWorldPosition(moonWorldPos);
+
+                camera.position.copy(earthWorldPos);
+                camera.position.y += 2;
+
+                camera.lookAt(moonWorldPos);
+            } else {
+                controls.enabled = true;
+                controls.update();
+
+                sun.visible = true;
+                sunGlow.visible = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        initialDays = calculateDaysFromReference(new Date('2024-03-21'));
+        simulationDays = initialDays;
+        updatePositionsFromDays(simulationDays);
+
+        animate();
+
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
